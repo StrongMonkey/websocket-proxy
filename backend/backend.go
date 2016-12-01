@@ -10,7 +10,6 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/rancher/websocket-proxy/common"
-	"io"
 )
 
 // Handler is the iterface passed into ConnectToProxy() to have messages routed to and from the handler.
@@ -18,7 +17,7 @@ type Handler interface {
 	Handle(messageKey string, initialMessage string, incomingMessages <-chan string, response chan<- common.Message)
 }
 
-func ConnectToProxy(proxyURL string, handlers map[string]Handler) error {
+func ConnectToProxy(proxyURL string, handlers map[string]Handler) {
 	log.WithFields(log.Fields{"url": proxyURL}).Info("Connecting to proxy.")
 
 	dialer := &websocket.Dialer{}
@@ -27,14 +26,13 @@ func ConnectToProxy(proxyURL string, handlers map[string]Handler) error {
 	if err != nil {
 		log.WithFields(log.Fields{
 			"error": err,
-		}).Error("Failed to connect to proxy.")
-		return err
+		}).Fatal("Failed to connect to proxy.")
 	}
 
-	return connectToProxyWS(ws, handlers)
+	connectToProxyWS(ws, handlers)
 }
 
-func connectToProxyWS(ws *websocket.Conn, handlers map[string]Handler) error {
+func connectToProxyWS(ws *websocket.Conn, handlers map[string]Handler) {
 	responders := make(map[string]chan string)
 	responseChannel := make(chan common.Message, 10)
 
@@ -46,7 +44,7 @@ func connectToProxyWS(ws *websocket.Conn, handlers map[string]Handler) error {
 			select {
 			case message, ok := <-responseChannel:
 				if !ok {
-					return io.EOF
+					return
 				}
 				data := common.FormatMessage(message.Key, message.Type, message.Body)
 				ws.WriteMessage(1, []byte(data))
@@ -65,7 +63,7 @@ func connectToProxyWS(ws *websocket.Conn, handlers map[string]Handler) error {
 		if err != nil {
 			log.WithFields(log.Fields{"error": err}).Error("Received error reading from socket. Exiting.")
 			close(responseChannel)
-			return err
+			return
 		}
 
 		message := common.ParseMessage(string(msg))
